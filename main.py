@@ -2,13 +2,7 @@ import socket
 import sys
 import threading
 
-ports = {
-    20: "FTP-DATA", 21: "FTP", 22: "SSH", 23: "Telnet",
-    25: "SMTP", 43: "WHOIS", 53: "DNS", 80: "http",
-    115: "SFTP", 123: "NTP", 143: "IMAP", 161: "SNMP",
-    179: "BGP", 443: "HTTPS", 465: "SMTP", 993: "IMAPS",
-    995: "POP3S", 1080: "SOCKS", 1194: "OpenVPN",
-}
+import packet_crafter
 
 lock = threading.Lock()
 lock_for_ports = threading.Lock()
@@ -57,17 +51,30 @@ class Scanner:
     def tcp_scan(self, begin_for_thread, end_for_thread):
         for port in range(begin_for_thread, end_for_thread):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.settimeout(3)
+            s.settimeout(1)
+            protocol = None
             try:
                 # connect сканирование
                 s.connect((self.destination, port))
+                try:
+                    data, _ = s.recvfrom(1024)
+                    protocol = self.recognize_port_tcp(data)
+                except:
+                    packets = packet_crafter.craft_tcp_packets()
+                    for packet in packets:
+                        s.sendto(packet, (self.destination, port))
+                        data, _ = s.recvfrom(1024)
+                        protocol = self.recognize_port_tcp(data)
+                        if protocol is not None:
+                            break
+
             except:
                 lock.acquire()
                 self._closed_ports += 1
                 lock.release()
             else:
                 lock_for_ports.acquire()
-                self._open_ports[port] = "open"
+                self._open_ports[port] = protocol
                 lock_for_ports.release()
             s.close()
 
@@ -97,17 +104,20 @@ class Scanner:
     def udp_scan(self, begin_for_thread, end_for_thread):
         for port in range(begin_for_thread, end_for_thread):
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(3)
+            s.settimeout(1)
             try:
-                for i in range(10):
-                    s.connect((socket.gethostbyname(self.destination), port))
-                    s.sendto(b"", (self.destination, port))
-                    data, _ = s.recvfrom(1024)
-                    if data is not None:
-                        lock_for_ports.acquire()
-                        self._open_ports[port] = "open"
-                        lock_for_ports.release()
-            except socket.error as e:
+                # посылаем udp пакет 3 раза
+                for i in range(3):
+                    for packet in packet_crafter.craft_udp_packets():
+                        s.sendto(packet, (self.destination, port))
+                        data, _ = s.recvfrom(1024)
+                        if data is not None:
+                            protocol = self.recognize_port_udp(data)
+                            lock_for_ports.acquire()
+                            self._open_ports[port] = protocol
+                            self._closed_ports -= 1
+                            lock_for_ports.release()
+            except socket.error:
                 lock.acquire()
                 self._closed_ports += 1
                 lock.release()
@@ -117,13 +127,45 @@ class Scanner:
         self._open_ports = dict(sorted(self._open_ports.items(), reverse=False))
         print(f"Closed ports: {self._closed_ports}")
         for i, v in self._open_ports.items():
-            print(f"TCP {i}: {v}")
+            if v is not None:
+                print(f"TCP {i}: {v}")
+            else:
+                print(f"TCP {i}")
 
     def print_ports_udp(self):
         self._open_ports = dict(sorted(self._open_ports.items(), reverse=False))
         print(f"Closed ports: {self._closed_ports}")
         for i, v in self._open_ports.items():
-            print(f"UDP {i}: {v}")
+            if v is not None:
+                print(f"UDP {i}: {v}")
+            else:
+                print(f"UDP {i}")
+
+    def recognize_port_tcp(self, data):
+        pop3_signature = b"+OK\r\n"
+        smtp_signature = b"220"
+        ssh_signature = b"SSH"
+        http_signature = b"HTTP/1.1"
+        whois_signature = b"% "
+        if data.startswith(pop3_signature):
+            return "POP3"
+        elif data.startswith(smtp_signature):
+            return "SMTP"
+        elif data.startswith(ssh_signature):
+            return "SSH"
+        elif data.startswith(http_signature):
+            return "HTTP"
+        elif data.startswith(whois_signature):
+            return "WHOIS"
+
+    def recognize_port_udp(self, data):
+        ntp_signature = b"\x1c"
+        dns_signature = b"\x00\x07exa"
+
+        if data.endswith(dns_signature):
+            return "DNS"
+        elif data.startswith(ntp_signature):
+            return "NTP"
 
 
 if __name__ == "__main__":
