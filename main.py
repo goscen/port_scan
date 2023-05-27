@@ -31,7 +31,7 @@ class Scanner:
         add = number_of_ports // self._threads
         if add == 0:
             self._threads = number_of_ports
-        start = 1
+        start = self.begin
         end_for_thread = start + add
         pool = []
         for i in range(0, self._threads - 1):
@@ -50,6 +50,7 @@ class Scanner:
 
     def tcp_scan(self, begin_for_thread, end_for_thread):
         for port in range(begin_for_thread, end_for_thread):
+            print(port)
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(1)
             protocol = None
@@ -67,7 +68,6 @@ class Scanner:
                         protocol = self.recognize_port_tcp(data)
                         if protocol is not None:
                             break
-
             except:
                 lock.acquire()
                 self._closed_ports += 1
@@ -103,6 +103,7 @@ class Scanner:
 
     def udp_scan(self, begin_for_thread, end_for_thread):
         for port in range(begin_for_thread, end_for_thread):
+
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.settimeout(1)
             try:
@@ -125,7 +126,7 @@ class Scanner:
 
     def print_ports_tcp(self):
         self._open_ports = dict(sorted(self._open_ports.items(), reverse=False))
-        print(f"Closed ports: {self._closed_ports}")
+        print(f"Closed ports: {self._closed_ports-len(self._open_ports)}")
         for i, v in self._open_ports.items():
             if v is not None:
                 print(f"TCP {i}: {v}")
@@ -134,7 +135,6 @@ class Scanner:
 
     def print_ports_udp(self):
         self._open_ports = dict(sorted(self._open_ports.items(), reverse=False))
-        print(f"Closed ports: {self._closed_ports}")
         for i, v in self._open_ports.items():
             if v is not None:
                 print(f"UDP {i}: {v}")
@@ -176,5 +176,6 @@ if __name__ == "__main__":
     type_of_scan = sys.argv[2]
     begin = sys.argv[4]
     end = sys.argv[5]
+    print(begin, end)
     scaner = Scanner(dest, type_of_scan, begin, end)
     scaner.start_scan()
