@@ -50,7 +50,6 @@ class Scanner:
 
     def tcp_scan(self, begin_for_thread, end_for_thread):
         for port in range(begin_for_thread, end_for_thread):
-            print(port)
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.settimeout(1)
             protocol = None
@@ -84,7 +83,7 @@ class Scanner:
         if add == 0:
             self._threads = number_of_ports
             add = 1
-        start = 1
+        start = self.begin
         end_for_thread = start + add
         pool = []
         for i in range(0, self._threads - 1):
@@ -103,7 +102,6 @@ class Scanner:
 
     def udp_scan(self, begin_for_thread, end_for_thread):
         for port in range(begin_for_thread, end_for_thread):
-
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             s.settimeout(1)
             try:
@@ -126,7 +124,6 @@ class Scanner:
 
     def print_ports_tcp(self):
         self._open_ports = dict(sorted(self._open_ports.items(), reverse=False))
-        print(f"Closed ports: {self._closed_ports-len(self._open_ports)}")
         for i, v in self._open_ports.items():
             if v is not None:
                 print(f"TCP {i}: {v}")
@@ -147,6 +144,7 @@ class Scanner:
         ssh_signature = b"SSH"
         http_signature = b"HTTP/1.1"
         whois_signature = b"% "
+        imap_signature = b'* OK IMAP4'
         if data.startswith(pop3_signature):
             return "POP3"
         elif data.startswith(smtp_signature):
@@ -157,6 +155,8 @@ class Scanner:
             return "HTTP"
         elif data.startswith(whois_signature):
             return "WHOIS"
+        elif data.startswith(imap_signature):
+            return "IMAP"
 
     def recognize_port_udp(self, data):
         ntp_signature = b"\x1c"
