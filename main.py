@@ -144,7 +144,7 @@ class Scanner:
         ssh_signature = b"SSH"
         http_signature = b"HTTP/1.1"
         whois_signature = b"% "
-        imap_signature = b'* OK IMAP4'
+        imap_signature = b'* OK'
         if data.startswith(pop3_signature):
             return "POP3"
         elif data.startswith(smtp_signature):
